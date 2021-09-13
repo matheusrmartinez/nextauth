@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useEffect, useState } from "react";
 import { api } from "../services/api";
 import Router from 'next/router';
-import { setCookie, parseCookies} from 'nookies'
+import { setCookie, parseCookies, destroyCookie } from 'nookies'
 
 type User = {
   email: string;
@@ -26,6 +26,13 @@ type AuthProviderProps = {
 
 export const AuthContext = createContext({} as AuthContextData);
 
+export function signOut() {
+  destroyCookie(undefined, 'reactauth.token')
+  destroyCookie(undefined, 'reactauth.refreshtoken')
+
+  Router.push('/')
+}
+
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User>();
   const isAuthenticated = !!user;
@@ -38,7 +45,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
         const { email, permissions, roles} = response.data
 
         setUser({ email, permissions, roles})
-      })
+      }).catch(() => {
+        signOut();
+      } )
     }
   }, [])
 
@@ -49,7 +58,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         password,
       });
 
-      const { token, refreshToken, permissions, roles } = response.data;
+      const { token, refreshToken, permissions, roles } = response?.data;
 
       // maneiras de armazenar o token e o refreshToken
       // session Storage - Se o usuário fechar o navegador e abrir novamente, perderá as informações.
