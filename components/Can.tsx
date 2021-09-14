@@ -3,11 +3,11 @@ import { useCan } from "../hooks/useCan";
 
 type CanProps = {
   children: ReactNode;
-  permissons?: string[];
+  permissions?: string[];
   roles?: string[];
 };
 
-export function Can({ children, permissions, roles }) {
+export function Can({ children, permissions, roles }: CanProps) {
   const userCanSeeComponent = useCan({ permissions, roles });
 
   if (!userCanSeeComponent) {
