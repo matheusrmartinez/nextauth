@@ -1,11 +1,29 @@
-import { GetServerSideProps, GetServerSidePropsContext, GetServerSidePropsResult } from "next";
-import { parseCookies } from "nookies";
+import {
+  GetServerSideProps,
+  GetServerSidePropsContext,
+  GetServerSidePropsResult,
+} from "next";
+import { destroyCookie, parseCookies } from "nookies";
+import { AuthTokenError } from "../services/errors/AuthTokenError";
+import decode from "jwt-decode";
+import { validateUserPermissions } from "./validateUserPermission";
 
-export function withSSRAuth<P>(fn: GetServerSideProps<P>): GetServerSideProps {
-  return async (ctx: GetServerSidePropsContext): Promise<GetServerSidePropsResult<P>> => {
+type WithSSRAuthOptions = {
+  permissions?: string[];
+  roles?: string[];
+};
+
+export function withSSRAuth<P>(
+  fn: GetServerSideProps<P>,
+  options?: WithSSRAuthOptions
+): GetServerSideProps {
+  return async (
+    ctx: GetServerSidePropsContext
+  ): Promise<GetServerSidePropsResult<P>> => {
     const cookies = parseCookies(ctx);
+    const token = cookies["reactauth.token"];
 
-    if (!cookies["reactauth.token"]) {
+    if (!token) {
       return {
         redirect: {
           destination: "/",
@@ -14,6 +32,40 @@ export function withSSRAuth<P>(fn: GetServerSideProps<P>): GetServerSideProps {
       };
     }
 
-    return await fn(ctx);
+    if (options) {
+      const user = decode<{ permissions: string[]; roles: string[] }>(token);
+
+      const { permissions, roles } = options;
+
+      const userHasValidPermissions = validateUserPermissions({
+        user,
+        permissions,
+        roles,
+      });
+
+      if (!userHasValidPermissions) {
+        return {
+          redirect: {
+            destination: "/dashboard",
+            permanent: false,
+          },
+        };
+      }
+    }
+
+    try {
+      return await fn(ctx);
+    } catch (error) {
+      if (error instanceof AuthTokenError) {
+        destroyCookie(ctx, "reactauth.token");
+        destroyCookie(ctx, "reactauth.refreshtoken");
+        return {
+          redirect: {
+            destination: "/",
+            permanent: false,
+          },
+        };
+      }
+    }
   };
 }
